@@ -10,6 +10,8 @@
 
 其它的git交互化项目：[Learn Git Branching](https://learngitbranching.js.org/?locale=zh_CN)一个闯关的git教程。
 
+另外，我是看bilibili的up*玄离199*入门的，强推这个up
+
 ## 功能特点
 
 - **4 区可视化** — Working Directory / Staging Area / Local Repo / Remote Repo 实时展示文件状态变化
