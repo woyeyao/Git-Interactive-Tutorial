@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Git Interactive Tutorial</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <!-- Top: 4 Git Zones (40vh) -->
+    <div class="zones">
+      <div class="zone" id="zone-working">
+        <div class="zone-header">
+          <span class="zone-icon">📁</span>
+          <span class="zone-title">Working Directory</span>
+          <span class="zone-subtitle">工作区</span>
+        </div>
+        <div class="zone-files" id="zone-working-files">
+          <div class="zone-empty">尚未初始化</div>
+        </div>
+      </div>
+
+      <div class="zone" id="zone-index">
+        <div class="zone-header">
+          <span class="zone-icon">📋</span>
+          <span class="zone-title">Staging Area</span>
+          <span class="zone-subtitle">暂存区 (Index)</span>
+        </div>
+        <div class="zone-files" id="zone-index-files">
+          <div class="zone-empty">尚未初始化</div>
+        </div>
+      </div>
+
+      <div class="zone" id="zone-local">
+        <div class="zone-header">
+          <span class="zone-icon">🗄️</span>
+          <span class="zone-title">Local Repository</span>
+          <span class="zone-subtitle">本地仓库</span>
+        </div>
+        <div class="zone-files" id="zone-local-files">
+          <div class="zone-empty">尚未初始化</div>
+        </div>
+      </div>
+
+      <div class="zone" id="zone-remote">
+        <div class="zone-header">
+          <span class="zone-icon">☁️</span>
+          <span class="zone-title">Remote Repository</span>
+          <span class="zone-subtitle">远程仓库</span>
+        </div>
+        <div class="zone-files" id="zone-remote-files">
+          <div class="zone-empty">尚未初始化</div>
+        </div>
+      </div>
+
+      <!-- SVG arrow overlay, drawn by JS -->
+      <svg class="arrows-overlay" id="arrows-overlay"></svg>
+    </div>
+
+    <!-- Bottom: Tutorial + Terminal (60vh) -->
+    <div class="bottom">
+      <!-- Left: Tutorial Cards -->
+      <div class="tutorial">
+        <div class="tutorial-sidebar" id="tutorial-sidebar">
+          <div class="sidebar-title">教程目录</div>
+          <div class="sidebar-chapters" id="sidebar-chapters"></div>
+        </div>
+        <div class="tutorial-main">
+          <div class="card-nav">
+            <button class="nav-btn" id="btn-prev" disabled>&#8592; 上一张</button>
+            <span class="card-progress" id="card-progress">1 / 1</span>
+            <button class="nav-btn" id="btn-next">下一张 &#8594;</button>
+          </div>
+          <div class="card-content" id="card-content">
+            <h2>欢迎</h2>
+            <p>选择左侧章节开始学习</p>
+          </div>
+          <div class="card-task" id="card-task">
+            <div class="task-label">Task</div>
+            <div class="task-prompt" id="task-prompt">等待加载...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Terminal -->
+      <div class="terminal">
+        <div class="terminal-header">
+          <span class="terminal-dots">
+            <span class="dot red"></span>
+            <span class="dot yellow"></span>
+            <span class="dot green"></span>
+          </span>
+          <span class="terminal-title">Terminal</span>
+        </div>
+        <div class="terminal-body" id="terminal-body">
+          <div class="terminal-output" id="terminal-output"></div>
+          <div class="terminal-input-line">
+            <span class="terminal-prompt">$</span>
+            <input type="text" class="terminal-input" id="terminal-input"
+                   placeholder="输入 git 命令..." autocomplete="off" spellcheck="false">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts (loaded as regular scripts, no modules) -->
+  <script src="js/state.js"></script>
+  <script src="js/parser.js"></script>
+  <script src="js/commands.js"></script>
+  <script src="js/tutorials.js"></script>
+  <script src="js/renderer.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
