@@ -25,7 +25,8 @@
     'pull': ['pull'],
     'fetch': ['pull'],
     'clone': ['clone'],
-    'merge': ['merge']
+    'restore': ['restore'],
+    'checkout': ['restore']
   };
 
   // === Terminal Input ===

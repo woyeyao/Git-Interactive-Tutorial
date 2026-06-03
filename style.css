@@ -418,6 +418,16 @@ body {
   font-style: normal;
 }
 
+.card-content blockquote {
+  border-left: 3px solid var(--accent);
+  padding: 8px 12px;
+  margin: 8px 0;
+  background: rgba(88, 166, 255, 0.06);
+  border-radius: 0 4px 4px 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
 /* ===== Task ===== */
 .card-task {
   border-top: 1px solid var(--border);

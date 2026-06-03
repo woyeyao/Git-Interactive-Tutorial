@@ -245,13 +245,13 @@ var GitTutorial = window.GitTutorial || {};
     // --- Cross-zone arrows (straight horizontal lines at bottom) ---
     var zoneH = pos.working.bottom - pos.working.top;
     var pullY = pos.working.bottom - zoneH * 0.15;
-    var mergeY = pullY;
     var cloneY = pos.working.bottom - zoneH * 0.05;
+    var mergeY = cloneY;
 
     var crossArrows = [
-      { name: 'merge', from: 'local', to: 'working', label: 'git merge', y: mergeY },
-      { name: 'pull', from: 'remote', to: 'local', label: 'git pull', y: pullY },
-      { name: 'clone', from: 'remote', to: 'working', label: 'git clone', y: cloneY }
+      { name: 'restore', from: 'local', to: 'working', label: 'git restore', y: mergeY },
+      { name: 'pull', from: 'remote', to: 'working', label: 'git pull', y: pullY },
+      { name: 'clone', from: 'remote', to: 'local', label: 'git clone', y: cloneY }
     ];
 
     for (var c = 0; c < crossArrows.length; c++) {
@@ -439,6 +439,11 @@ var GitTutorial = window.GitTutorial || {};
     // List items
     if (/^- (.+)$/.test(line)) {
       return '<li>' + this._formatInline(RegExp.$1) + '</li>';
+    }
+
+    // Blockquote
+    if (/^>\s?(.+)$/.test(line)) {
+      return '<blockquote>' + this._formatInline(RegExp.$1) + '</blockquote>';
     }
 
     // Skip empty lines

@@ -629,7 +629,10 @@ var GitTutorial = window.GitTutorial || {};
 
     // Create a sample commit
     var hash = generateHash();
-    var sampleFiles = { 'README.md': { content: '# ' + (url || 'My Project') + '\n\nWelcome to the project.' } };
+    var sampleFiles = {
+      'README.md': { content: '# ' + (url || 'My Project') + '\n\nWelcome to the project.' },
+      'example.py': { content: 'def hello():\n    print("Hello from example.py")\n\nhello()\n' }
+    };
     var commit = {
       hash: hash,
       message: 'Initial commit',
