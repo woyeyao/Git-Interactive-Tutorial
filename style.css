@@ -617,6 +617,14 @@ body {
   animation: slideIn 0.15s ease;
 }
 
+/* ===== Celebration ===== */
+.celebrate-msg {
+  color: var(--accent);
+  font-weight: 600;
+  text-align: center;
+  padding: 4px 0;
+}
+
 /* ===== Scrollbar ===== */
 ::-webkit-scrollbar {
   width: 6px;

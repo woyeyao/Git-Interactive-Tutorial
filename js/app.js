@@ -138,9 +138,56 @@
       var expectedCmd = codeMatch[i].replace(/<\/?code>/g, '').trim();
       if (normalizedInput === expectedCmd || normalizedInput.startsWith(expectedCmd)) {
         renderer.markTaskCompleted();
+        if (card.id === 'ch5-pull') celebrate();
         break;
       }
     }
+  }
+
+  function celebrate() {
+    // 1. 终端庆祝文字
+    var lines = [
+      '',
+      '  ╔══════════════════════════════════════╗',
+      '  ║                                      ║',
+      '  ║   🎉 恭喜！你已掌握 Git 核心工作流     ║',
+      '  ║                                      ║',
+      '  ║      add → commit → push & pull      ║',
+      '  ║                                      ║',
+      '  ╚══════════════════════════════════════╝',
+      ''
+    ];
+    var out = document.getElementById('terminal-output');
+    lines.forEach(function(line) {
+      var div = document.createElement('div');
+      div.className = 'terminal-line celebrate-msg';
+      div.textContent = line;
+      out.appendChild(div);
+    });
+    renderer.scrollTerminalToBottom();
+
+    // 2. 箭头逐个点亮，最后全部亮
+    var arrows = ['add', 'commit', 'push', 'pull', 'clone', 'restore'];
+    var delay = 0;
+    var step = 1000;
+
+    // 先熄灭所有箭头
+    arrows.forEach(function(name) { renderer.hideArrow(name); });
+
+    // 逐个点亮
+    arrows.forEach(function(name, i) {
+      setTimeout(function() {
+        // 熄灭前一个，亮当前
+        if (i > 0) renderer.hideArrow(arrows[i - 1]);
+        renderer.showArrow(name);
+      }, delay);
+      delay += step;
+    });
+
+    // 最后全部亮
+    setTimeout(function() {
+      arrows.forEach(function(name) { renderer.showArrow(name); });
+    }, delay);
   }
 
   // Nav buttons

@@ -175,6 +175,12 @@ var GitTutorial = window.GitTutorial || {};
     this.drawArrows();
   };
 
+  Renderer.prototype.hideArrow = function(name) {
+    if (!this.visibleArrows[name]) return;
+    this.visibleArrows[name] = false;
+    this.drawArrows();
+  };
+
   Renderer.prototype.drawArrows = function() {
     if (!this.arrowsSvg) return;
     var container = this.zones.working ? this.zones.working.closest('.zones') : null;
@@ -228,14 +234,14 @@ var GitTutorial = window.GitTutorial || {};
 
     for (var a = 0; a < adjArrows.length; a++) {
       var ar = adjArrows[a];
-      if (!this.visibleArrows[ar.name]) continue;
       if (!pos[ar.from] || !pos[ar.to]) continue;
 
       var x1 = pos[ar.from].right;
       var x2 = pos[ar.to].left;
       var y = pos[ar.from].midY;
+      var cls = this.visibleArrows[ar.name] ? 'arrow-group visible' : 'arrow-group';
 
-      svg += '<g class="arrow-group visible">';
+      svg += '<g class="' + cls + '">';
       svg += '<line x1="' + x1 + '" y1="' + y + '" x2="' + (x2 - ahSize) + '" y2="' + y + '" stroke="' + color + '" stroke-width="2"/>';
       svg += rightAh(x2, y);
       svg += '<text x="' + ((x1 + x2) / 2) + '" y="' + (y - 12) + '" text-anchor="middle" fill="' + color + '" font-size="11">' + ar.label + '</text>';
@@ -256,14 +262,14 @@ var GitTutorial = window.GitTutorial || {};
 
     for (var c = 0; c < crossArrows.length; c++) {
       var cr = crossArrows[c];
-      if (!this.visibleArrows[cr.name]) continue;
       if (!pos[cr.from] || !pos[cr.to]) continue;
 
       var x1 = pos[cr.from].left;
       var x2 = pos[cr.to].right;
       var y = cr.y;
+      var cls = this.visibleArrows[cr.name] ? 'arrow-group visible' : 'arrow-group';
 
-      svg += '<g class="arrow-group visible">';
+      svg += '<g class="' + cls + '">';
       svg += '<line x1="' + x1 + '" y1="' + y + '" x2="' + (x2 + ahSize) + '" y2="' + y + '" stroke="' + color + '" stroke-width="2"/>';
       svg += leftAh(x2, y);
       var labelX = (x1 + x2) / 2;

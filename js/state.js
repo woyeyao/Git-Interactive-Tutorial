@@ -40,6 +40,7 @@ var GitTutorial = window.GitTutorial || {};
     }
     this.initialized = true;
     this.currentBranch = 'main';
+    this.branches['main'] = null;
     return { success: true, output: 'Initialized empty Git repository' };
   };
 
@@ -348,8 +349,12 @@ var GitTutorial = window.GitTutorial || {};
       return { success: true, output: lines.join('\n') };
     }
 
-    if (this.branches[name]) {
+    if (name in this.branches) {
       return { success: false, output: "fatal: A branch named '" + name + "' already exists." };
+    }
+
+    if (!this.HEAD) {
+      return { success: false, output: "fatal: Not a valid object name: '" + this.currentBranch + "'." };
     }
 
     this.branches[name] = this.HEAD;
@@ -367,7 +372,7 @@ var GitTutorial = window.GitTutorial || {};
       return { success: false, output: '用法: git checkout -b <branch-name>' };
     }
 
-    if (!this.branches[target]) {
+    if (!(target in this.branches)) {
       return { success: false, output: "error: pathspec '" + target + "' did not match any file(s) known to git" };
     }
 
@@ -391,7 +396,7 @@ var GitTutorial = window.GitTutorial || {};
     if (!this.initialized) {
       return { success: false, output: '尚未初始化仓库。请先输入: git init' };
     }
-    if (this.branches[name]) {
+    if (name in this.branches) {
       return { success: false, output: "fatal: A branch named '" + name + "' already exists." };
     }
 
@@ -409,7 +414,7 @@ var GitTutorial = window.GitTutorial || {};
       return { success: false, output: '用法: git switch -c <branch-name>' };
     }
 
-    if (!this.branches[target]) {
+    if (!(target in this.branches)) {
       return { success: false, output: "fatal: invalid branch name: '" + target + "'" };
     }
 
@@ -425,8 +430,11 @@ var GitTutorial = window.GitTutorial || {};
     if (!this.initialized) {
       return { success: false, output: '尚未初始化仓库。请先输入: git init' };
     }
-    if (!this.branches[branch]) {
+    if (!(branch in this.branches)) {
       return { success: false, output: "error: The branch '" + branch + "' is not found." };
+    }
+    if (!this.branches[branch]) {
+      return { success: false, output: "error: branch '" + branch + "' does not have any commits yet." };
     }
     if (branch === this.currentBranch) {
       return { success: false, output: "Already on '" + this.currentBranch + "'" };
@@ -661,8 +669,11 @@ var GitTutorial = window.GitTutorial || {};
     if (!this.initialized) {
       return { success: false, output: '尚未初始化仓库。请先输入: git init' };
     }
-    if (!this.branches[target]) {
+    if (!(target in this.branches)) {
       return { success: false, output: "invalid branch: " + target };
+    }
+    if (!this.branches[target]) {
+      return { success: false, output: "error: branch '" + target + "' does not have any commits yet." };
     }
     if (target === this.currentBranch) {
       return { success: false, output: "Cannot rebase onto self" };
