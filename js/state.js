@@ -367,11 +367,6 @@ var GitTutorial = window.GitTutorial || {};
       return { success: false, output: '尚未初始化仓库。请先输入: git init' };
     }
 
-    // checkout -b <name> → create and switch
-    if (target === '-b') {
-      return { success: false, output: '用法: git checkout -b <branch-name>' };
-    }
-
     if (!(target in this.branches)) {
       return { success: false, output: "error: pathspec '" + target + "' did not match any file(s) known to git" };
     }
@@ -391,6 +386,50 @@ var GitTutorial = window.GitTutorial || {};
 
     return { success: true, output: "Switched to branch '" + target + "'" };
   };
+
+  GitState.prototype.checkoutCommit = function(hash){
+    if(!this.initialized){
+      return { success: false, output: '尚未初始化仓库。请先输入: git init' };
+    }
+    var commit = this._getCommit(hash);
+    if(!commit){
+      return { success: false, output: "fatal: Not a valid object name: '" + hash + "'." };
+    }
+    this.HEAD = hash;
+    this.workingDir = {};
+    this.staging = {};
+    if (commit && commit.files) {
+      for (var f in commit.files) {
+        this.workingDir[f] = { content: commit.files[f].content, status: 'committed' };
+      }
+    }
+    return { success: true, output: "Switched to commit '" + hash + "'" };
+  
+  }
+
+  GitState.prototype.checkoutCommitNewBranch = function(name, hash){
+    if(!this.initialized){
+      return { success: false, output: '尚未初始化仓库。请先输入: git init' };
+    }
+    var commit = this._getCommit(hash);
+    if(!commit){
+      return { success: false, output: "fatal: Not a valid object name: '" + hash + "'." };
+    }
+    if (name in this.branches) {
+      return { success: false, output: "fatal: A branch named '" + name + "' already exists." };
+    }
+    this.HEAD = hash;
+    this.branches[name] = hash;
+    this.currentBranch = name;
+    this.workingDir = {};
+    this.staging = {};
+    if (commit && commit.files) {
+      for (var f in commit.files) {
+        this.workingDir[f] = { content: commit.files[f].content, status: 'committed' };
+      }
+    }  
+    return { success: true, output: "Switched to a new branch '" + name + "'" };
+  }
 
   GitState.prototype.checkoutNewBranch = function(name) {
     if (!this.initialized) {
