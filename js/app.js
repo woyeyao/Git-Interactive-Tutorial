@@ -345,6 +345,11 @@
   document.getElementById('ctx-create').addEventListener('click', function(e) {
     e.stopPropagation();
     var fileName = prompt('请输入文件名');
+    if (!fileName) 
+    {
+      document.getElementById('ctx-menu').hidden = true;
+      return;
+    }
     state.createFile(fileName);
     document.getElementById('ctx-menu').hidden = true;
     renderer.renderAll();
