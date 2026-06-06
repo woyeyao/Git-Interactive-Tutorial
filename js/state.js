@@ -99,7 +99,7 @@ var GitTutorial = window.GitTutorial || {};
 
     if (!this.workingDir[filename]) {
       // Auto-create file for tutorial convenience
-      this.workingDir[filename] = { content: '# ' + filename + '\n', status: 'new' };
+      return { success: false, output: '文件不存在: ' + filename };
     }
 
     this.staging[filename] = { content: this.workingDir[filename].content };
@@ -396,6 +396,7 @@ var GitTutorial = window.GitTutorial || {};
       return { success: false, output: "fatal: Not a valid object name: '" + hash + "'." };
     }
     this.HEAD = hash;
+    this.currentBranch = null;
     this.workingDir = {};
     this.staging = {};
     if (commit && commit.files) {

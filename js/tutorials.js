@@ -199,6 +199,10 @@ git config --global user.email "your@email.com"
 
 在使用 Git 之前，我们先创建一些文件。以下是常用的辅助命令：
 
+你也可以在工作区右键鼠标点击，选择「创建文件」或者右键已存在的文件「删除」。
+
+双击文件也可以编辑，可通过红绿颜色区分已暂存和未暂存的修改。
+
 **touch — 创建空文件**
 \`\`\`
 touch readme.md
@@ -361,19 +365,13 @@ git restore readme.md
     {
       id: 'ch3-checkout-file',
       chapter: 3,
-      title: 'checkout 恢复文件',
-      content: `## git checkout 恢复文件（旧语法）
+      title: 'checkout Hash',
+      content: `## git checkout Hash
 
-在 Git 2.23 之前，恢复文件用的是：
-\`\`\`
-git checkout -- <file>
-\`\`\`
 
-因为 \`git checkout\` 同时用于切换分支和恢复文件，容易搞混。所以新版本拆分成了：
-- \`git switch\` — 切换分支
-- \`git restore\` — 恢复文件
-
-你仍然会看到很多项目使用旧语法，了解一下有好处。`,
+      回退到指定的commit。  
+      
+      要注意使用该指令时处于分离HEAD状态，最好不要在此基础上修改文件。该指令常用于临时查看历史commit的内容`,
       task: null
     },
 
@@ -422,6 +420,10 @@ dev:                 D -- E
 \`git checkout -b dev\` — 创建 dev 分支并立即切换过去
 
 切换后，你的工作区会变成 dev 分支的内容。两个分支可以各自独立开发，互不影响。
+
+\`git checkout -b dev Hash\` — 从指定的commit处创建 dev 分支并立即切换过去
+
+切换后，你的工作区会变成 dev 分支的内容。两个分支可以各自独立开发，互不影响，且是从指定的commit开始延申。
 
 **试试看**：切换到 dev 分支`,
       task: { prompt: '请输入: <code>git checkout dev</code>' },

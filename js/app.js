@@ -230,6 +230,134 @@
     };
   }
 
+
+  //right-click context menu
+  function handleRightCtxAction(x, y, target) {
+    var ctxMenu = document.getElementById('ctx-menu');
+    ctxMenu.style.left = x + 'px';
+    ctxMenu.style.top = y + 'px';
+    ctxMenu.hidden = false;
+    if (target!==null && target.classList.contains('zone-file')) {
+      document.getElementById('ctx-create').hidden = true;
+      document.getElementById('ctx-delete').hidden = false;
+    } else {
+      document.getElementById('ctx-create').hidden = false;
+      document.getElementById('ctx-delete').hidden = true;
+    }
+  }
+  var ctxMenu = document.getElementById('zone-working-files');
+  var target = null;
+  ctxMenu.addEventListener('contextmenu', function(e) {
+    if(!state.initialized) return;
+    e.preventDefault();
+    target = e.target.closest('.zone-file, .zone-folder');
+    handleRightCtxAction(e.clientX, e.clientY,target);
+  });
+
+  ctxMenu.addEventListener('dblclick', function(e) {
+    e.stopPropagation();
+    var target = e.target.closest('.zone-file');
+    if (target) {
+      var fileName = target.querySelector('.file-name').textContent;
+      var file = state.workingDir[fileName];
+      if (file) {
+        document.getElementById('modal-title').textContent = fileName;
+        document.getElementById('modal-editor').value = file.content;
+        document.getElementById('ctx-menu').hidden = true;
+
+        var diffEl = document.getElementById('modal-diff');
+        var diff = computeFileDiff(fileName, file.content);
+        if (diff) {
+          diffEl.innerHTML = diff;
+        } else {
+          diffEl.innerHTML = '';
+        }
+
+        document.getElementById('file-modal').hidden = false;
+        currentEditFile = fileName;
+      }
+    }
+  });
+
+  function computeFileDiff(fileName, wdContent) {
+    var st = state.staging[fileName];
+    var stContent = st ? st.content : '';
+    var committedContent = '';
+
+    if (state.HEAD) {
+      var lastCommit = state._getCommit(state.HEAD);
+      if (lastCommit && lastCommit.files[fileName]) {
+        committedContent = lastCommit.files[fileName].content || '';
+      }
+    }
+    var compareContent = st ? stContent : committedContent;
+
+    if (wdContent === compareContent) {
+      return ''; 
+    }
+
+    var oldLines = compareContent.split('\n');
+    var newLines = wdContent.split('\n');
+    var html = '';
+
+    var maxLen = Math.max(oldLines.length, newLines.length);
+    for (var i = 0; i < maxLen; i++) {
+      var oldLine = i < oldLines.length ? oldLines[i] : undefined;
+      var newLine = i < newLines.length ? newLines[i] : undefined;
+
+      if (oldLine === newLine) {
+        html += '<span class="diff-line">' + escapeHtml(oldLine !== undefined ? oldLine : '') + '</span>\n';
+      } else {
+        if (oldLine !== undefined) {
+          html += '<span class="diff-line diff-del">' + escapeHtml(oldLine) + '</span>\n';
+        }
+        if (newLine !== undefined) {
+          html += '<span class="diff-line diff-add">' + escapeHtml(newLine) + '</span>\n';
+        }
+      }
+    }
+    return html;
+  }
+
+  function escapeHtml(text) {
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  var currentEditFile = null;
+  document.getElementById('modal-save').addEventListener('click', function() {
+    if (currentEditFile) {
+      var newContent = document.getElementById('modal-editor').value;
+      state.modifyFile(currentEditFile, newContent);
+      renderer.renderAll();
+    }
+    document.getElementById('file-modal').hidden = true;
+    currentEditFile = null;
+  });
+  document.getElementById('modal-cancel').addEventListener('click', function() {
+    document.getElementById('file-modal').hidden = true;
+    currentEditFile = null;
+  });
+  document.getElementById('modal-close').addEventListener('click', function() {
+    document.getElementById('file-modal').hidden = true;
+    currentEditFile = null;
+  });
+
+  document.getElementById('ctx-create').addEventListener('click', function(e) {
+    e.stopPropagation();
+    var fileName = prompt('请输入文件名');
+    state.createFile(fileName);
+    document.getElementById('ctx-menu').hidden = true;
+    renderer.renderAll();
+  });
+  document.getElementById('ctx-delete').addEventListener('click', function() {
+    state.deleteFile(target.querySelector('.file-name').textContent);
+    renderer.renderAll();
+  });
+
+  document.addEventListener('click', function() {
+    document.getElementById('ctx-menu').hidden = true;
+  });
+
   // === LocalStorage ===
   function saveState() {
     try {

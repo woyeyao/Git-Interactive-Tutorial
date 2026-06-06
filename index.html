@@ -23,6 +23,28 @@
           <div class="zone-empty">尚未初始化</div>
         </div>
       </div>
+      <ul id="ctx-menu" class="ctx-menu" hidden>
+        <li data-action="create" id="ctx-create">新建文件</li>
+        <li data-action="delete" id="ctx-delete">删除文件</li>
+      </ul>
+
+      <!-- File Editor Modal -->
+      <div id="file-modal" class="modal" hidden>
+        <div class="modal-content">
+          <div class="modal-header">
+            <span id="modal-title">文件内容</span>
+            <span id="modal-close" class="modal-close">&times;</span>
+          </div>
+          <div class="modal-body">
+            <div id="modal-diff" class="modal-diff"></div>
+            <textarea id="modal-editor" class="modal-editor"></textarea>
+          </div>
+          <div class="modal-footer">
+            <button id="modal-save" class="modal-btn">保存</button>
+            <button id="modal-cancel" class="modal-btn">取消</button>
+          </div>
+        </div>
+      </div>
 
       <div class="zone" id="zone-index">
         <div class="zone-header">
