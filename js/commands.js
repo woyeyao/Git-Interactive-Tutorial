@@ -112,7 +112,17 @@ var GitTutorial = window.GitTutorial || {};
         if (args.length < 2) {
           return { success: false, output: '用法: git checkout -b <branch-name>' };
         }
-        return state.checkoutNewBranch(args[1]);
+        if(args.length === 2)
+        {
+          return state.checkoutNewBranch(args[1]);
+        }
+        if(args.length === 3)
+        {
+          return state.checkoutCommitNewBranch(args[1], args[2]);
+        }
+      }else if(!(args[0] in state.branches))
+      {
+        return state.checkoutCommit(args[0]);
       }
       return state.checkout(args[0]);
     },

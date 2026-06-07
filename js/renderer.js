@@ -55,7 +55,7 @@ var GitTutorial = window.GitTutorial || {};
 
     var files = Object.keys(this.state.workingDir);
     // Show .git folder indicator when initialized
-    var html = '<div class="zone-file"><span class="file-name" style="color:var(--text-muted)">.git/</span><span class="file-status staged">dir</span></div>';
+    var html = '<div class="zone-file"><span class="file-status staged">dir</span></div>';
 
     if (files.length === 0) {
       html += '<div class="zone-empty" style="padding-top:8px">工作区干净</div>';
@@ -112,22 +112,255 @@ var GitTutorial = window.GitTutorial || {};
       return;
     }
 
-    var commits = this.state.commits.slice(-5).reverse();
-    var html = '';
+    // Build git graph
+    var graphHtml = this._buildGitGraph();
+    el.innerHTML = graphHtml;
+  };
+
+  Renderer.prototype._buildGitGraph = function() {
+    var self = this;
+    var commits = this.state.commits;
+    var branches = this.state.branches;
+    var HEAD = this.state.HEAD;
+    var currentBranch = this.state.currentBranch;
+
+    // Branch colors
+    var branchColors = ['#58a6ff', '#3fb950', '#d29922', '#bc8cff', '#f85149', '#db6d28', '#8957e5'];
+    var branchColorMap = {};
+    var colorIndex = 0;
+    for (var b in branches) {
+      branchColorMap[b] = branchColors[colorIndex % branchColors.length];
+      colorIndex++;
+    }
+
+    // Build commit map
+    var commitMap = {};
+    for (var i = 0; i < commits.length; i++) {
+      commitMap[commits[i].hash] = commits[i];
+    }
+
+    // Build children map (reverse of parent)
+    var childrenMap = {};
     for (var i = 0; i < commits.length; i++) {
       var c = commits[i];
-      var isHead = c.hash === this.state.HEAD;
-      html += '<div class="zone-file">' +
-        '<span class="file-name" style="color:' + (isHead ? 'var(--accent)' : 'var(--text-secondary)') + '">' +
-        c.hash.substring(0, 7) + ' ' + this._escapeHtml(c.message) +
-        '</span>' +
-        (isHead ? '<span class="file-status staged">HEAD</span>' : '') +
+      childrenMap[c.hash] = [];
+    }
+    for (var i = 0; i < commits.length; i++) {
+      var c = commits[i];
+      if (c.parent && childrenMap[c.parent]) {
+        childrenMap[c.parent].push({hash: c.hash, type: 'parent'});
+      }
+      if (c.mergeParent && childrenMap[c.mergeParent]) {
+        childrenMap[c.mergeParent].push({hash: c.hash, type: 'merge'});
+      }
+    }
+
+    // Calculate lanes from HEAD backwards
+    var commitLane = {};
+    var nextLane = 0;
+    var branchStartCommit = {};
+
+    // Find branch start commits
+    for (var branchName in branches) {
+      var tipHash = branches[branchName];
+      branchStartCommit[tipHash] = branchName;
+    }
+
+    // Assign lanes starting from each branch tip
+    function assignLaneFromCommit(hash, preferredLane) {
+      if (commitLane[hash] !== undefined) {
+        return commitLane[hash];
+      }
+
+      var commit = commitMap[hash];
+      if (!commit) return 0;
+
+      // Use preferred lane or create new
+      var lane = preferredLane !== undefined ? preferredLane : nextLane++;
+      commitLane[hash] = lane;
+
+      // Continue with parent
+      if (commit.parent) {
+        var parentCommit = commitMap[commit.parent];
+        if (parentCommit) {
+          // Check if parent has multiple children (branch point)
+          var siblings = childrenMap[commit.parent] || [];
+          if (siblings.length > 1) {
+            // This is a branch point, assign parent to same lane as first child
+            assignLaneFromCommit(commit.parent, lane);
+          } else {
+            assignLaneFromCommit(commit.parent, lane);
+          }
+        }
+      }
+
+      return lane;
+    }
+
+    // Process branches: main first, then others
+    var branchList = Object.keys(branches);
+    branchList.sort(function(a, b) {
+      if (a === 'main' || a === 'master') return -1;
+      if (b === 'main' || b === 'master') return 1;
+      return 0;
+    });
+
+    for (var i = 0; i < branchList.length; i++) {
+      var branchName = branchList[i];
+      var tipHash = branches[branchName];
+      assignLaneFromCommit(tipHash);
+    }
+
+    // Also assign lanes for any commits not yet processed (orphaned)
+    for (var i = 0; i < commits.length; i++) {
+      if (commitLane[commits[i].hash] === undefined) {
+        assignLaneFromCommit(commits[i].hash);
+      }
+    }
+
+    var maxLane = 0;
+    for (var h in commitLane) {
+      maxLane = Math.max(maxLane, commitLane[h]);
+    }
+
+    // Build ordered list (newest first for display)
+    var orderedCommits = commits.slice().reverse();
+    var orderedCommitIndex = {};
+    for (var i = 0; i < orderedCommits.length; i++) {
+      orderedCommitIndex[orderedCommits[i].hash] = i;
+    }
+
+    // Settings
+    var nodeRadius = 5;
+    var laneWidth = 14;
+    var commitHeight = 32;
+    var leftPadding = 16;
+    var svgWidth = leftPadding + (maxLane + 1) * laneWidth + 8;
+
+    var connections = [];
+    for (var i = 0; i < orderedCommits.length; i++) {
+      var c = orderedCommits[i];
+      var fromRow = i;
+
+      // Parent connection
+      if (c.parent && commitLane[c.parent] !== undefined) {
+        var toRow = orderedCommitIndex[c.parent];
+        if (toRow !== undefined) {
+          connections.push({
+            fromHash: c.hash,
+            toHash: c.parent,
+            fromLane: commitLane[c.hash],
+            toLane: commitLane[c.parent],
+            color: branchColorMap[c.branch] || '#58a6ff',
+            type: 'parent',
+            fromRow: fromRow,
+            toRow: toRow
+          });
+        }
+      }
+
+      // Merge parent connection
+      if (c.mergeParent && commitLane[c.mergeParent] !== undefined) {
+        var toRow = orderedCommitIndex[c.mergeParent];
+        if (toRow !== undefined) {
+          connections.push({
+            fromHash: c.hash,
+            toHash: c.mergeParent,
+            fromLane: commitLane[c.hash],
+            toLane: commitLane[c.mergeParent],
+            color: '#f85149',
+            type: 'merge',
+            fromRow: fromRow,
+            toRow: toRow
+          });
+        }
+      }
+    }
+
+    // Build HTML with inline SVG for each row
+    var html = '<div class="git-graph-rows">';
+
+    for (var i = 0; i < orderedCommits.length; i++) {
+      var c = orderedCommits[i];
+      var lane = commitLane[c.hash] || 0;
+      var isHead = c.hash === HEAD;
+      var color = branchColorMap[c.branch] || '#58a6ff';
+
+      // Find branches at this commit
+      var branchNames = [];
+      for (var bn in branches) {
+        if (branches[bn] === c.hash) {
+          branchNames.push(bn);
+        }
+      }
+
+      // Build SVG for this row
+      var rowSvgHeight = commitHeight;
+      var rowSvg = '<svg class="git-graph-row-svg" width="' + svgWidth + '" height="' + rowSvgHeight + '">';
+
+      // Draw all connections that pass through this row
+      for (var j = 0; j < connections.length; j++) {
+        var conn = connections[j];
+        // This connection passes through this row if:
+        // - it starts at this row (fromRow === i), draw down
+        // - it passes through this row (fromRow < i && i < toRow), draw vertical through
+        if (conn.fromRow === i) {
+          // Starting from this row
+          var x1 = leftPadding + conn.fromLane * laneWidth + nodeRadius;
+          var y1 = nodeRadius + 10;
+          var x2 = leftPadding + conn.toLane * laneWidth + nodeRadius;
+          var y2 = rowSvgHeight + nodeRadius + 10;
+
+          if (conn.fromLane === conn.toLane) {
+            // Straight line down
+            rowSvg += '<line x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + y2 + '" stroke="' + conn.color + '" stroke-width="2"/>';
+          } else {
+            // Bezier curve
+            var midY = (y1 + y2) / 2;
+            var dash = conn.type === 'merge' ? ' stroke-dasharray="3,2"' : '';
+            rowSvg += '<path d="M' + x1 + ',' + y1 + ' C' + x1 + ',' + midY + ' ' + x2 + ',' + midY + ' ' + x2 + ',' + y2 + '" stroke="' + conn.color + '" stroke-width="2" fill="none"' + dash + '/>';
+          }
+        } else if (conn.fromRow < i && i < conn.toRow) {
+          // Passing through this row - draw vertical line
+          var x = leftPadding + conn.toLane * laneWidth + nodeRadius;
+          var y1 = 0;
+          var y2 = rowSvgHeight;
+          rowSvg += '<line x1="' + x + '" y1="' + y1 + '" x2="' + x + '" y2="' + y2 + '" stroke="' + conn.color + '" stroke-width="2"/>';
+        }
+      }
+
+      // Draw node
+      var nx = leftPadding + lane * laneWidth + nodeRadius;
+      var ny = nodeRadius + 12;
+      if (isHead) {
+        rowSvg += '<circle cx="' + nx + '" cy="' + ny + '" r="' + (nodeRadius + 2) + '" fill="none" stroke="' + color + '" stroke-width="2"/>';
+      }
+      rowSvg += '<circle cx="' + nx + '" cy="' + ny + '" r="' + nodeRadius + '" fill="' + color + '"/>';
+
+      rowSvg += '</svg>';
+
+      // Build branch tags
+      var branchTags = '';
+      for (var j = 0; j < branchNames.length; j++) {
+        var bn = branchNames[j];
+        var bc = branchColorMap[bn] || '#58a6ff';
+        var isCurrent = bn === currentBranch;
+        branchTags += '<span class="git-graph-branch" style="background:' + bc + (isCurrent ? ';font-weight:600' : '') + '">' + (isCurrent ? 'HEAD → ' : '') + bn + '</span>';
+      }
+
+      // Build row
+      html += '<div class="git-graph-row' + (isHead ? ' head' : '') + '">' +
+        rowSvg +
+        '<div class="git-graph-info">' +
+        '<span class="commit-hash">' + c.hash.substring(0, 7) + '</span>' +
+        '<span class="commit-message">' + this._escapeHtml(c.message) + '</span>' +
+        branchTags +
+        '</div>' +
         '</div>';
     }
 
-    var branchHtml = '<div style="font-size:11px;color:var(--text-muted);padding:4px 8px;margin-bottom:4px">📋 ' +
-      this.state.currentBranch + ' · ' + this.state.commits.length + ' commits</div>';
-    el.innerHTML = branchHtml + html;
+    html += '</div>';
+    return html;
   };
 
   Renderer.prototype._renderRemote = function() {
