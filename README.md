@@ -4,7 +4,7 @@
 
 ![概览](./assets/概览.png)
 
-新手友好的git的交互型入门中文教程。本作者也是小白，欢迎各位大佬指正，也欢迎新人体验。
+新手友好的git的交互型入门中文教程。本作者也是小白，欢迎各位大佬指正，也欢迎新人体验。[git官方中文教程](https://git-scm.com/book/zh/v2)
 
 当然，现在有AI了，学git不用钻研命令的格式参数，所以本项目重在促进理解一个git的大概过程，4个区是怎么联动的。之后还可以学习git graph之类的图形化界面，继续深入。
 
@@ -63,6 +63,8 @@
 - SVG 箭头动画
 - localStorage 持久化
 
-## License
+## License And Declaration
 
 MIT
+
+Thanks for all contributors

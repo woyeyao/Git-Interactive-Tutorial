@@ -293,7 +293,7 @@ cat readme.md
 \`\`\`
 
 刚才你已经 add 了 readme.md，现在用 \`git diff --staged\` 看看暂存区里有什么。`,
-      task: { prompt: '请输入: <code>git diff --staged</code>' },
+      task: null,
       highlights: []
     },
     {
@@ -349,16 +349,32 @@ Date:   Mon Jun 2 10:00:00 2025
       title: 'git restore',
       content: `## git restore — 恢复文件
 
-\`git restore <file>\` 把文件恢复到最后一次 commit 的状态，丢弃工作区的修改。
+\`git restore\` 专门用于恢复文件内容。数据通常在三个地方流动：**工作区**、**暂存区**、**提交历史(HEAD)**。
 
+**场景 1：丢弃工作区的修改（最常用）**
 \`\`\`
 git restore readme.md
 \`\`\`
+把工作区的文件恢复成**暂存区**里的样子。如果没暂存过，就恢复成最后一次提交的样子。
 
-这是从 local repo → working directory 的操作。你改乱了文件，想回到上次 commit 的样子，就用 restore。
+**场景 2：取消暂存（撤销 git add）**
+\`\`\`
+git restore --staged readme.md
+\`\`\`
+把文件从暂存区撤出来，但**不会**改变工作区你刚写的代码。
 
-另一个用法：\`git restore --staged <file>\` 取消暂存（从暂存区移除，但保留工作区修改）。
-`,
+**场景 3：同时丢弃暂存区和工作区的修改**
+\`\`\`
+git restore --staged --worktree readme.md
+\`\`\`
+彻底放弃这个文件的所有修改，让它直接回到最后一次提交的状态。
+
+**场景 4：从历史提交中恢复文件**
+\`\`\`
+git restore --source=HEAD~1 readme.md
+\`\`\`
+把上一次提交里的文件，直接拉到现在的工作区里。
+> 注：\`HEAD\` 代表当前最新提交，\`HEAD~1\` 代表上一次提交，\`HEAD~2\` 是上两次，依此类推。`,
       task: { prompt: '输入 <code>git restore readme.md</code>' },
       highlights: ['restore']
     },
@@ -369,7 +385,7 @@ git restore readme.md
       content: `## git checkout Hash
 
 
-      回退到指定的commit。  
+      切换到指定的commit。  
       
       要注意使用该指令时处于分离HEAD状态，最好不要在此基础上修改文件。该指令常用于临时查看历史commit的内容`,
       task: null
@@ -427,6 +443,26 @@ dev:                 D -- E
 
 **试试看**：切换到 dev 分支`,
       task: { prompt: '请输入: <code>git checkout dev</code>' },
+      highlights: []
+    },
+    {
+      id: 'ch4-checkout-history',
+      chapter: 4,
+      title: 'Git 史话',
+      content: `## Git 史话：checkout、switch 与 restore
+
+在早期，\`git checkout\` 承担了太多责任，核心逻辑是“把某个东西拿出来放到工作区”。这导致了极大的概念混乱：
+
+1. **操作分支**：\`git checkout dev\`（切换分支）
+2. **操作文件**：\`git checkout -- readme.md\`（丢弃修改，恢复文件）
+
+**分家（Git 2.23 引入）**：
+为了让命令见名知意，Git 社区将 \`checkout\` 的功能一分为二，推出了两个专职的新命令：
+- **\`git switch\`**：专职负责**切换分支**。
+- **\`git restore\`**：专职负责**恢复文件**（还顺便接管了以前用 \`reset HEAD\` 来取消暂存的工作）。
+
+虽然老将 \`checkout\` 依然可用，但现代 Git 教程强烈建议你拥抱 \`switch\` 和 \`restore\`。`,
+      task: null,
       highlights: []
     },
     {
@@ -665,9 +701,9 @@ fetch 后:  本地 main → C,  origin/main → E
 git remote add origin git@github.com:user/repo.git
 git pull origin main
 \`\`\`
-\`origin\` 是远程仓库名，\`main\` 是分支名。\`git pull\` = \`git fetch\` + \`git merge\`。
+\`origin\` 是远程仓库名，\`main\` 是分支名。默认情况下，\`git pull\` = \`git fetch\` + \`git merge\`。
 
-pull 先从远程下载 commit，然后在 local repo 里合并分支，最后根据合并结果更新工作区的文件。日常开发中，开始工作前先 \`git pull\` 是个好习惯。
+pull 先从远程下载 commit，然后在 local repo 里合并分支，最后更新工作区的文件。日常开发中，开始工作前先 \`git pull\` 是个好习惯。
 
 \`\`\`
 本地:  A -- B -- C
@@ -677,6 +713,12 @@ pull 后: A -- B -- C -- M (merge commit)
                   \\      /
                    D -- E
 \`\`\`
+
+### 扩展：GitHub Pull Request (PR) 的合并方式
+当你把代码 push 到远程并提起 PR 后，在 GitHub 页面上通常有三种合并方式：
+1. **Create a merge commit**：保留所有 commit 历史，并生成一个新的 Merge commit（类似上面的 M）。适合保留完整开发过程。
+2. **Squash and merge**：把你的多个 commit 压缩成一个全新的 commit 加入主分支。主分支历史最干净，适合小功能。
+3. **Rebase and merge**：把你的 commit 逐个复制并重新排列在主分支最前面，没有 merge commit，历史是一条直线。
 
 到这里，你已经掌握了 Git 的核心工作流：
 **add → commit → push & pull**
@@ -693,27 +735,26 @@ pull 后: A -- B -- C -- M (merge commit)
       title: 'git reset',
       content: `## git reset — 重置
 
-\`git reset\` 撤销 commit，有三种模式，区别在于撤销的范围：
+\`git reset\` 通过移动 HEAD 指针来撤销 commit。它有三种模式，区别在于如何处理暂存区和工作区：
 
 ### --soft（软重置）
-只撤销 commit。修改保留在暂存区，可以直接重新 commit。
-适用场景：commit 信息写错了，想重新写。
+仅仅把 HEAD 移回旧 commit。你撤销的那些提交内容，会全部被放在**暂存区**里。
+适用场景：commit 拆分、合并，或者信息写错了想重新写。
 
 ### --mixed（默认）
-撤销 commit 和 add。修改保留在工作区，需要重新 add。
-适用场景：想把几个 commit 合并成一个。
+把 HEAD 移回旧 commit，并且把**暂存区也重置**为那个状态。但不触碰工作区。
+适用场景：相当于撤销了 commit 并且撤销了 \`git add\`，文件还在，你需要重新整理修改。
 
 ### --hard（硬重置）
-彻底回到某个 commit 的状态。**危险操作，未提交的修改会丢失！**
-适用场景：当前改动完全不要了，回到干净的状态。
+移动 HEAD，并且把暂存区和**工作区**全部强行重置！
+**危险操作，未提交的修改会永久丢失！**
+适用场景：当前改动完全不要了，彻底回到干净的旧状态。
 
 \`\`\`
-git reset --soft HEAD~1   # 撤销最后一次 commit
-git reset --mixed HEAD~1  # 撤销 commit 和 add
-git reset --hard HEAD~1   # 彻底回退
-\`\`\`
-
-\`HEAD~1\` 表示「上一个 commit」，\`HEAD~2\` 表示「上两个 commit」，以此类推。`,
+git reset --soft HEAD~1   # 仅撤销 commit
+git reset --mixed HEAD~1  # 撤销 commit 和 add (默认)
+git reset --hard HEAD~1   # 彻底回退，抛弃所有修改
+\`\`\``,
       task: null,
       highlights: []
     },
@@ -797,6 +838,34 @@ git switch main    # 切到 main 修 bug
 git switch feature # 切回来
 git stash pop      # 恢复之前的工作
 \`\`\``,
+      task: null,
+      highlights: []
+    },
+    {
+      id: 'ch7-worktree',
+      chapter: 7,
+      title: 'git worktree',
+      content: `## git worktree — 多开工作区
+
+正常情况下，一个 Git 仓库只能同时检出一个分支的代码在工作区里。
+但 \`git worktree\` 允许你为**同一个本地仓库**创建**多个并行的工作目录**。
+
+**痛点场景：**
+你在 \`feature\` 分支写了大量代码，本地环境正跑着。突然老板让你立刻切到 \`main\` 修紧急 Bug。
+- 直接切？有大量未提交修改，Git 会阻止。
+- 用 stash 藏起来切？切分支会导致项目依赖或编译产物被冲刷，切来切去很痛苦。
+
+**Worktree 的完美解法：**
+保持当前目录一动不动，直接在旁边开辟一个新目录修 Bug！它们底层共享同一个 Git 数据库。
+
+\`\`\`
+# 在当前仓库外创建一个名为 hotfix 的新目录，并检出 main 分支
+git worktree add ../hotfix main
+
+# 修完 Bug 提交后，清理掉这个临时目录
+git worktree remove ../hotfix
+\`\`\`
+极速、省空间，而且彻底隔离了开发环境，保护了你的开发心流。`,
       task: null,
       highlights: []
     },

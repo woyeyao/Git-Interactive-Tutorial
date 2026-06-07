@@ -207,15 +207,99 @@ var GitTutorial = window.GitTutorial || {};
     return { success: true, output: lines.join('\n') };
   };
 
+  // === Diff Helper: LCS-based line diff with hunk grouping ===
+  GitState.prototype._formatDiff = function(fname, oldContent, newContent) {
+    var oldLines = oldContent === '' ? [] : oldContent.split('\n');
+    var newLines = newContent === '' ? [] : newContent.split('\n');
+    var m = oldLines.length, n = newLines.length;
+
+    // LCS table
+    var dp = [];
+    for (var i = 0; i <= m; i++) {
+      dp[i] = [];
+      for (var j = 0; j <= n; j++) {
+        if (i === 0 || j === 0) dp[i][j] = 0;
+        else if (oldLines[i - 1] === newLines[j - 1]) dp[i][j] = dp[i - 1][j - 1] + 1;
+        else dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+
+    // Backtrack to produce diff entries
+    var raw = [];
+    i = m; j = n;
+    while (i > 0 || j > 0) {
+      if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
+        raw.unshift({ type: ' ', line: oldLines[i - 1], oldLine: i, newLine: j });
+        i--; j--;
+      } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+        raw.unshift({ type: '+', line: newLines[j - 1], newLine: j });
+        j--;
+      } else {
+        raw.unshift({ type: '-', line: oldLines[i - 1], oldLine: i });
+        i--;
+      }
+    }
+
+    // Group into hunks (3 lines context)
+    var CONTEXT = 3;
+    var hunks = [];
+    var current = null;
+
+    for (var k = 0; k < raw.length; k++) {
+      if (raw[k].type !== ' ') {
+        // Change line — start or extend hunk
+        var start = Math.max(0, k - CONTEXT);
+        var end = Math.min(raw.length - 1, k + CONTEXT);
+        if (!current || start > current.end + 1) {
+          if (current) hunks.push(current);
+          current = { start: start, end: end };
+        } else {
+          current.end = end;
+        }
+      }
+    }
+    if (current) hunks.push(current);
+
+    // Build output
+    var result = [];
+    result.push('diff --git a/' + fname + ' b/' + fname);
+    result.push('--- a/' + fname);
+    result.push('+++ b/' + fname);
+
+    for (var h = 0; h < hunks.length; h++) {
+      var hunk = hunks[h];
+      var oldStart = -1, oldCount = 0, newStart = -1, newCount = 0;
+
+      for (var l = hunk.start; l <= hunk.end; l++) {
+        var e = raw[l];
+        if (e.type === ' ' || e.type === '-') {
+          if (oldStart === -1) oldStart = e.oldLine;
+          oldCount++;
+        }
+        if (e.type === ' ' || e.type === '+') {
+          if (newStart === -1) newStart = e.newLine;
+          newCount++;
+        }
+      }
+
+      if (oldStart === -1) oldStart = 0;
+      if (newStart === -1) newStart = 0;
+      result.push('@@ -' + oldStart + ',' + oldCount + ' +' + newStart + ',' + newCount + ' @@');
+      for (var l = hunk.start; l <= hunk.end; l++) {
+        result.push(raw[l].type + ' ' + raw[l].line);
+      }
+    }
+
+    return result.join('\n');
+  };
+
   // === Git Diff ===
   GitState.prototype.diff = function(filename) {
     if (!this.initialized) {
       return { success: false, output: '尚未初始化仓库。请先输入: git init' };
     }
 
-    var lines = [];
-    var hasDiff = false;
-
+    var result = [];
     var files = filename ? [filename] : Object.keys(this.workingDir);
     for (var i = 0; i < files.length; i++) {
       var fname = files[i];
@@ -228,7 +312,6 @@ var GitTutorial = window.GitTutorial || {};
       var stContent = st ? st.content : '';
       var committedContent = '';
 
-      // Get committed content
       if (this.HEAD) {
         var lastCommit = this._getCommit(this.HEAD);
         if (lastCommit && lastCommit.files[fname]) {
@@ -236,31 +319,16 @@ var GitTutorial = window.GitTutorial || {};
         }
       }
 
-      // Compare working dir with staging (or committed if nothing staged)
       var compareContent = st ? stContent : committedContent;
       if (wdContent !== compareContent) {
-        hasDiff = true;
-        lines.push('diff --git a/' + fname + ' b/' + fname);
-        lines.push('--- a/' + fname);
-        lines.push('+++ b/' + fname);
-
-        var oldLines = compareContent.split('\n');
-        var newLines = wdContent.split('\n');
-        lines.push('@@ -1,' + oldLines.length + ' +1,' + newLines.length + ' @@');
-
-        for (var ol = 0; ol < oldLines.length; ol++) {
-          lines.push('- ' + oldLines[ol]);
-        }
-        for (var nl = 0; nl < newLines.length; nl++) {
-          lines.push('+ ' + newLines[nl]);
-        }
+        result.push(this._formatDiff(fname, compareContent, wdContent));
       }
     }
 
-    if (!hasDiff) {
+    if (result.length === 0) {
       return { success: true, output: '' };
     }
-    return { success: true, output: lines.join('\n') };
+    return { success: true, output: result.join('\n') };
   };
 
   // === Git Diff --staged ===
@@ -269,9 +337,7 @@ var GitTutorial = window.GitTutorial || {};
       return { success: false, output: '尚未初始化仓库。请先输入: git init' };
     }
 
-    var lines = [];
-    var hasDiff = false;
-
+    var result = [];
     for (var fname in this.staging) {
       var stContent = this.staging[fname].content || '';
       var committedContent = '';
@@ -284,26 +350,14 @@ var GitTutorial = window.GitTutorial || {};
       }
 
       if (stContent !== committedContent) {
-        hasDiff = true;
-        lines.push('diff --git a/' + fname + ' b/' + fname);
-        lines.push('--- a/' + fname);
-        lines.push('+++ b/' + fname);
-        var oldLines = committedContent.split('\n');
-        var newLines = stContent.split('\n');
-        lines.push('@@ -1,' + oldLines.length + ' +1,' + newLines.length + ' @@');
-        for (var ol = 0; ol < oldLines.length; ol++) {
-          lines.push('- ' + oldLines[ol]);
-        }
-        for (var nl = 0; nl < newLines.length; nl++) {
-          lines.push('+ ' + newLines[nl]);
-        }
+        result.push(this._formatDiff(fname, committedContent, stContent));
       }
     }
 
-    if (!hasDiff) {
+    if (result.length === 0) {
       return { success: true, output: '' };
     }
-    return { success: true, output: lines.join('\n') };
+    return { success: true, output: result.join('\n') };
   };
 
   // === Git Log ===
