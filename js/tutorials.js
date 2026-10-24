@@ -155,7 +155,7 @@ parent commit -> tree -> blob
 
 **试试看**：在终端输入 \`git init\`，观察上方「工作区」的变化。`,
       task: { prompt: '请输入: <code>git init</code>' },
-      highlights: ['init']
+      highlights: []
     },
     {
       id: 'ch2-config',
@@ -286,10 +286,10 @@ cat readme.md
 - \`git diff --staged\` — 比较**暂存区 vs 上一次 commit**，看你 add 了什么
 - \`git diff\` — 比较**工作区 vs 暂存区**，看你改了但还没 add 的内容
 
-输出格式：
+输出格式（注意 \`+\` \`-\` 后面**没有空格**，直接跟内容）：
 \`\`\`
-- hello world     （旧行，被删除）
-+ Hello Git       （新行，被添加）
+-hello world       （旧行，被删除）
++Hello Git         （新行，被添加）
 \`\`\`
 
 刚才你已经 add 了 readme.md，现在用 \`git diff --staged\` 看看暂存区里有什么。`,
@@ -865,7 +865,9 @@ git worktree add ../hotfix main
 # 修完 Bug 提交后，清理掉这个临时目录
 git worktree remove ../hotfix
 \`\`\`
-极速、省空间，而且彻底隔离了开发环境，保护了你的开发心流。`,
+极速、省空间，而且彻底隔离了开发环境，保护了你的开发心流。
+
+> 本模拟器不模拟多目录，这两条命令了解用法即可。`,
       task: null,
       highlights: []
     },
@@ -1015,9 +1017,9 @@ Git Flow 是一种流行的分支管理策略：
 
 - **main** — 永远是生产环境的代码
 - **develop** — 开发主线
-- **feature/*** — 功能分支，从 develop 分出
-- **release/*** — 发布准备分支
-- **hotfix/*** — 紧急修复分支
+- **\`feature/*\`** — 功能分支，从 develop 分出
+- **\`release/*\`** — 发布准备分支
+- **\`hotfix/*\`** — 紧急修复分支
 
 \`\`\`
 main:     A --------- M --------- R

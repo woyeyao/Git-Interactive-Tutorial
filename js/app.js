@@ -31,6 +31,128 @@
 
   // === Terminal Input ===
   var inputEl = document.getElementById('terminal-input');
+  var mirrorEl = document.getElementById('terminal-input-mirror');
+
+  // Command lists for Tab completion
+  var GIT_SUBCOMMANDS = ['init', 'clone', 'add', 'status', 'commit', 'diff', 'log',
+    'branch', 'checkout', 'switch', 'merge', 'push', 'pull', 'fetch', 'rebase',
+    'stash', 'cherry-pick', 'reset', 'revert', 'tag', 'rm', 'restore', 'config',
+    'remote', 'show', 'blame'];
+  var HELPER_COMMANDS = ['touch', 'echo', 'cat', 'clear', 'help', 'reset-tutorial'];
+
+  // Option flags offered after each git subcommand (Tab completion).
+  var GIT_FLAGS = {
+    'add': ['--all', '--update', '--patch', '--intent-to-add'],
+    'restore': ['--staged', '--worktree', '--source', '--cached', '-s'],
+    'rm': ['--cached', '--force', '-r'],
+    'reset': ['--soft', '--mixed', '--hard'],
+    'commit': ['--message', '--amend', '-m'],
+    'checkout': ['-b', '--'],
+    'switch': ['-c', '-C', '--'],
+    'merge': ['--no-ff', '--abort', '--'],
+    'tag': ['-a', '-d', '-l'],
+    'branch': ['-d', '-D', '-m', '-M'],
+    'stash': ['push', 'pop', 'list', 'apply', 'drop', 'show', 'clear', '-u'],
+    'diff': ['--staged', '--cached', '--name-only', '--stat'],
+    'log': ['--oneline', '--stat', '--graph', '-p'],
+    'remote': ['-v', 'add', 'remove', 'rename', 'show'],
+    'fetch': ['--all', '--prune'],
+    'pull': ['--rebase', '--no-ff'],
+    'push': ['--force', '-u', '--set-upstream', '--delete'],
+    'rebase': ['--continue', '--abort', '--skip'],
+    'cherry-pick': ['--continue', '--abort', '-x']
+  };
+
+  function commonPrefix(arr) {
+    if (!arr.length) return '';
+    var p = arr[0];
+    for (var i = 1; i < arr.length; i++) {
+      while (arr[i].indexOf(p) !== 0) { p = p.slice(0, -1); if (!p) return ''; }
+    }
+    return p;
+  }
+
+  function colorizeCommand(value) {
+    var esc = function(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+    var parts = value.split(/\s+/);
+    if (parts[0] === 'git') {
+      var h = '<span class="git-cmd">git</span>';
+      if (parts[1]) h += ' <span class="git-subcmd">' + esc(parts[1]) + '</span>';
+      if (parts.length > 2) h += ' <span class="cmd-arg">' + esc(parts.slice(2).join(' ')) + '</span>';
+      return h;
+    }
+    if (HELPER_COMMANDS.indexOf(parts[0]) !== -1) {
+      var h2 = '<span class="helper-cmd">' + esc(parts[0]) + '</span>';
+      if (parts.length > 1) h2 += ' <span class="cmd-arg">' + esc(parts.slice(1).join(' ')) + '</span>';
+      return h2;
+    }
+    return esc(value);
+  }
+
+  function updateMirror() {
+    if (mirrorEl) mirrorEl.innerHTML = colorizeCommand(inputEl.value);
+  }
+
+  function applyCompletion(newTokens) {
+    var v = newTokens.join(' ');
+    if (newTokens.length === 1) v += ' ';
+    inputEl.value = v;
+    updateMirror();
+  }
+
+  function doTabCompletion() {
+    var val = inputEl.value;
+    var trailingSpace = /\s$/.test(val);
+    var tokens = val.split(/\s+/).filter(Boolean);
+    var prefix, candidates;
+    if (tokens.length === 0) {
+      candidates = ['git'].concat(HELPER_COMMANDS); prefix = '';
+    } else if (tokens[0] === 'git') {
+      if (tokens.length === 1) {
+        candidates = GIT_SUBCOMMANDS; prefix = '';
+      } else if (tokens.length === 2 && tokens[1].charAt(0) !== '-' && GIT_SUBCOMMANDS.indexOf(tokens[1]) === -1) {
+        // partial subcommand (e.g. "git resto") -> complete to a subcommand
+        candidates = GIT_SUBCOMMANDS; prefix = tokens[1];
+      } else {
+        var sub = tokens[1];
+        var lastTok = trailingSpace ? '' : tokens[tokens.length - 1];
+        var hasFlag = tokens.slice(1).some(function(t) { return t.charAt(0) === '-'; });
+        var flags = GIT_FLAGS[sub] || [];
+        if (lastTok.charAt(0) === '-') {
+          // currently typing a flag -> complete from this subcommand's flags
+          candidates = flags; prefix = lastTok;
+        } else if (trailingSpace && !hasFlag && flags.length) {
+          // fresh token right after the subcommand -> offer flags first
+          candidates = flags; prefix = '';
+        } else {
+          candidates = Object.keys(state.workingDir);
+          prefix = trailingSpace ? '' : lastTok;
+        }
+      }
+    } else if (HELPER_COMMANDS.indexOf(tokens[0]) !== -1) {
+      candidates = Object.keys(state.workingDir);
+      prefix = trailingSpace ? '' : tokens[tokens.length - 1];
+    } else {
+      candidates = []; prefix = '';
+    }
+    var matches = candidates.filter(function(c) { return c.indexOf(prefix) === 0; });
+    // When the caret sits right after a space the user is starting a NEW token,
+    // so the completion is appended; otherwise it replaces the last token.
+    var append = trailingSpace;
+    if (matches.length === 1) {
+      if (append) tokens.push(matches[0]); else tokens[tokens.length - 1] = matches[0];
+      applyCompletion(tokens);
+    } else if (matches.length > 1) {
+      // 仅做输入框内联补全：扩展到最长公共前缀，不向终端打印候选清单
+      var cp = commonPrefix(matches);
+      if (cp.length > prefix.length) {
+        if (append) tokens.push(cp); else tokens[tokens.length - 1] = cp;
+        applyCompletion(tokens);
+      }
+    }
+  }
+
+  inputEl.addEventListener('input', updateMirror);
 
   function executeCommand(input) {
     if (!input || !input.trim()) return;
@@ -89,13 +211,19 @@
     if (e.key === 'Enter') {
       var input = inputEl.value;
       inputEl.value = '';
+      updateMirror();
       executeCommand(input);
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      doTabCompletion();
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       inputEl.value = parser.getPrevHistory();
+      updateMirror();
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
       inputEl.value = parser.getNextHistory();
+      updateMirror();
     }
   });
 
@@ -136,10 +264,25 @@
 
     for (var i = 0; i < codeMatch.length; i++) {
       var expectedCmd = codeMatch[i].replace(/<\/?code>/g, '').trim();
-      if (normalizedInput === expectedCmd || normalizedInput.startsWith(expectedCmd)) {
+      if (!expectedCmd) continue;
+
+      var normalizedExpected = expectedCmd.replace(/\s+/g, ' ');
+
+      // Exact match, or the user typed the expected command with trailing
+      // arguments. Compare token-wise so `git commit -m "first"` does not
+      // satisfy a task that only asked for `git commit`.
+      if (normalizedInput === normalizedExpected) {
         renderer.markTaskCompleted();
         if (card.id === 'ch5-pull') celebrate();
-        break;
+        return;
+      }
+
+      // A prompt with no flags (e.g. `git status`) also accepts extra args.
+      var expectsFlags = /\s-/.test(normalizedExpected);
+      if (!expectsFlags && normalizedInput.indexOf(normalizedExpected + ' ') === 0) {
+        renderer.markTaskCompleted();
+        if (card.id === 'ch5-pull') celebrate();
+        return;
       }
     }
   }
@@ -254,67 +397,84 @@
     handleRightCtxAction(e.clientX, e.clientY,target);
   });
 
-  ctxMenu.addEventListener('dblclick', function(e) {
+  // Double-click any file in the Working Directory OR Staging Area to view its
+  // content in the modal. Staging-area files open read-only (view only); the
+  // working-directory file opens editable.
+  function openFileModal(e) {
     e.stopPropagation();
     var target = e.target.closest('.zone-file');
-    if (target) {
-      var fileName = target.querySelector('.file-name').textContent;
-      var file = state.workingDir[fileName];
-      if (file) {
-        document.getElementById('modal-title').textContent = fileName;
-        document.getElementById('modal-editor').value = file.content;
-        document.getElementById('ctx-menu').hidden = true;
+    if (!target) return;
+    var nameEl = target.querySelector('.file-name');
+    if (!nameEl) return;
+    var fileName = nameEl.textContent;
+    var inIndex = !!target.closest('#zone-index-files');
+    var file = inIndex ? state.staging[fileName] : state.workingDir[fileName];
+    if (!file) return;
 
-        var diffEl = document.getElementById('modal-diff');
-        var diff = computeFileDiff(fileName, file.content);
-        if (diff) {
-          diffEl.innerHTML = diff;
-        } else {
-          diffEl.innerHTML = '';
-        }
-
-        document.getElementById('file-modal').hidden = false;
-        currentEditFile = fileName;
-      }
-    }
-  });
-
-  function computeFileDiff(fileName, wdContent) {
-    var st = state.staging[fileName];
-    var stContent = st ? st.content : '';
+    var content = file.content || '';
     var committedContent = '';
-
     if (state.HEAD) {
       var lastCommit = state._getCommit(state.HEAD);
-      if (lastCommit && lastCommit.files[fileName]) {
-        committedContent = lastCommit.files[fileName].content || '';
-      }
-    }
-    var compareContent = st ? stContent : committedContent;
-
-    if (wdContent === compareContent) {
-      return ''; 
+      if (lastCommit && lastCommit.files[fileName]) committedContent = lastCommit.files[fileName].content || '';
     }
 
-    var oldLines = compareContent.split('\n');
-    var newLines = wdContent.split('\n');
+    var baseContent, diff;
+    if (inIndex) {
+      // Staging view: diff against the last committed version (HEAD).
+      baseContent = committedContent;
+    } else {
+      // Working view: diff against staging if staged, else against HEAD.
+      var st = state.staging[fileName];
+      baseContent = st ? st.content : committedContent;
+    }
+    diff = computeFileDiff(fileName, baseContent, content);
+
+    document.getElementById('modal-title').textContent = fileName + (inIndex ? '（暂存区）' : '');
+    document.getElementById('modal-editor').value = content;
+    document.getElementById('modal-diff').innerHTML = diff || '';
+    document.getElementById('ctx-menu').hidden = true;
+
+    // Staging files are view-only.
+    document.getElementById('modal-editor').readOnly = inIndex;
+    document.getElementById('modal-save').disabled = inIndex;
+
+    currentEditFile = fileName;
+    currentEditZone = inIndex ? 'index' : 'work';
+    document.getElementById('file-modal').hidden = false;
+  }
+
+  document.getElementById('zone-working-files').addEventListener('dblclick', openFileModal);
+  document.getElementById('zone-index-files').addEventListener('dblclick', openFileModal);
+
+  // Render a diff preview (baseContent -> targetContent) using the same LCS diff
+  // the terminal's `git diff` uses, so the modal and command output never
+  // disagree. An index-by-index comparison would repaint every line after an
+  // insertion as changed. Callers pass the appropriate base (HEAD / staging).
+  function computeFileDiff(fileName, baseContent, targetContent) {
+    if (targetContent === baseContent) return '';
+
+    // Reuse the state's line diff: feed it the two versions and keep only the
+    // body lines (skip the diff --git / --- / +++ / @@ headers).
+    var raw = state._formatDiff(fileName, baseContent, targetContent);
+    var lines = raw.split('\n');
     var html = '';
+    var started = false;
 
-    var maxLen = Math.max(oldLines.length, newLines.length);
-    for (var i = 0; i < maxLen; i++) {
-      var oldLine = i < oldLines.length ? oldLines[i] : undefined;
-      var newLine = i < newLines.length ? newLines[i] : undefined;
-
-      if (oldLine === newLine) {
-        html += '<span class="diff-line">' + escapeHtml(oldLine !== undefined ? oldLine : '') + '</span>\n';
-      } else {
-        if (oldLine !== undefined) {
-          html += '<span class="diff-line diff-del">' + escapeHtml(oldLine) + '</span>\n';
-        }
-        if (newLine !== undefined) {
-          html += '<span class="diff-line diff-add">' + escapeHtml(newLine) + '</span>\n';
-        }
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      if (!started) {
+        if (line.charAt(0) === '@') started = true;   // first hunk header
+        continue;
       }
+      if (line.charAt(0) === '@') continue;           // later hunk headers
+
+      var cls = 'diff-line';
+      var text = line;
+      if (line.charAt(0) === '+') { cls += ' diff-add'; text = line.substring(1); }
+      else if (line.charAt(0) === '-') { cls += ' diff-del'; text = line.substring(1); }
+      else if (line.charAt(0) === ' ') { text = line.substring(1); }
+
+      html += '<span class="' + cls + '">' + escapeHtml(text) + '</span>\n';
     }
     return html;
   }
@@ -324,23 +484,25 @@
   }
 
   var currentEditFile = null;
+  var currentEditZone = null;
+  function closeFileModal() {
+    document.getElementById('file-modal').hidden = true;
+    document.getElementById('modal-editor').readOnly = false;
+    document.getElementById('modal-save').disabled = false;
+    currentEditFile = null;
+    currentEditZone = null;
+  }
   document.getElementById('modal-save').addEventListener('click', function() {
-    if (currentEditFile) {
+    // Only the working-directory file is editable; staging files open read-only.
+    if (currentEditZone === 'work' && currentEditFile) {
       var newContent = document.getElementById('modal-editor').value;
       state.modifyFile(currentEditFile, newContent);
       renderer.renderAll();
     }
-    document.getElementById('file-modal').hidden = true;
-    currentEditFile = null;
+    closeFileModal();
   });
-  document.getElementById('modal-cancel').addEventListener('click', function() {
-    document.getElementById('file-modal').hidden = true;
-    currentEditFile = null;
-  });
-  document.getElementById('modal-close').addEventListener('click', function() {
-    document.getElementById('file-modal').hidden = true;
-    currentEditFile = null;
-  });
+  document.getElementById('modal-cancel').addEventListener('click', closeFileModal);
+  document.getElementById('modal-close').addEventListener('click', closeFileModal);
 
   document.getElementById('ctx-create').addEventListener('click', function(e) {
     e.stopPropagation();
@@ -355,7 +517,16 @@
     renderer.renderAll();
   });
   document.getElementById('ctx-delete').addEventListener('click', function() {
-    state.deleteFile(target.querySelector('.file-name').textContent);
+    // `target` is the element captured on right-click; guard against it being
+    // stale (e.g. the menu was opened before a re-render).
+    if (target) {
+      var nameEl = target.querySelector('.file-name');
+      if (nameEl) {
+        var res = state.deleteFile(nameEl.textContent);
+        if (res && res.output) renderer.renderTerminalOutput(res);
+      }
+    }
+    document.getElementById('ctx-menu').hidden = true;
     renderer.renderAll();
   });
 
@@ -377,6 +548,10 @@
         remote: state.remote,
         stash: state.stash,
         tags: state.tags,
+        config: state.config,
+        mergeConflict: state.mergeConflict,
+        mergeConflictKinds: state.mergeConflictKinds,
+        pendingMerge: state.pendingMerge,
         visibleArrows: renderer.visibleArrows
       }));
     } catch (e) {}
@@ -404,6 +579,7 @@
     renderer.renderAll();
     showCard(0);
     inputEl.focus();
+    updateMirror();
 
     renderer.renderTerminalOutput({
       success: true,

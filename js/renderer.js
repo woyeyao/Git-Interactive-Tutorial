@@ -57,6 +57,12 @@ var GitTutorial = window.GitTutorial || {};
     // Show .git folder indicator when initialized
     var html = '<div class="zone-file"><span class="file-status staged">dir</span></div>';
 
+    // Surface an unresolved merge conflict prominently
+    if (this.state.mergeConflict && this.state.mergeConflict.length > 0) {
+      html += '<div class="zone-empty" style="padding:6px 8px;color:var(--red);font-size:11px">' +
+        '⚠️ 合并冲突待解决: ' + this.state.mergeConflict.length + ' 个文件</div>';
+    }
+
     if (files.length === 0) {
       html += '<div class="zone-empty" style="padding-top:8px">工作区干净</div>';
     } else {
@@ -65,6 +71,11 @@ var GitTutorial = window.GitTutorial || {};
         var f = this.state.workingDir[fname];
         var statusClass = f.status || '';
         var statusText = this._statusLabel(f.status);
+        // A conflicted file is highlighted as such
+        if (this.state.mergeConflict && this.state.mergeConflict.indexOf(fname) !== -1) {
+          statusClass = 'deleted';
+          statusText = 'conflict';
+        }
         html += '<div class="zone-file">' +
           '<span class="file-name">' + this._escapeHtml(fname) + '</span>' +
           (statusText ? '<span class="file-status ' + statusClass + '">' + statusText + '</span>' : '') +
@@ -92,9 +103,11 @@ var GitTutorial = window.GitTutorial || {};
       var fname = files[i];
       var f = this.state.staging[fname];
       var statusText = f.deleted ? 'deleted' : 'staged';
+      // A staged deletion is red, not the blue used for staged additions.
+      var statusClass = f.deleted ? 'deleted' : 'staged';
       html += '<div class="zone-file">' +
         '<span class="file-name">' + this._escapeHtml(fname) + '</span>' +
-        '<span class="file-status staged">' + statusText + '</span>' +
+        '<span class="file-status ' + statusClass + '">' + statusText + '</span>' +
         '</div>';
     }
     el.innerHTML = html;
@@ -211,10 +224,27 @@ var GitTutorial = window.GitTutorial || {};
       assignLaneFromCommit(tipHash);
     }
 
-    // Also assign lanes for any commits not yet processed (orphaned)
+    // Any commit not reachable from a branch tip (detached HEAD, or every
+    // branch deleted) still belongs to history. Walk back from HEAD so the
+    // whole line shares one lane instead of getting a lane per commit, which
+    // drew a straight history as a staircase.
+    if (HEAD && commitMap[HEAD] && commitLane[HEAD] === undefined) {
+      assignLaneFromCommit(HEAD, 0);
+    }
     for (var i = 0; i < commits.length; i++) {
       if (commitLane[commits[i].hash] === undefined) {
-        assignLaneFromCommit(commits[i].hash);
+        var orphanCommit = commits[i];
+        // Reuse the lane of a child that already has one, so an orphan chain
+        // is drawn on a single lane.
+        var orphanLane;
+        var orphanChildren = childrenMap[orphanCommit.hash] || [];
+        for (var oc = 0; oc < orphanChildren.length; oc++) {
+          if (commitLane[orphanChildren[oc].hash] !== undefined) {
+            orphanLane = commitLane[orphanChildren[oc].hash];
+            break;
+          }
+        }
+        assignLaneFromCommit(orphanCommit.hash, orphanLane);
       }
     }
 
@@ -345,7 +375,7 @@ var GitTutorial = window.GitTutorial || {};
         var bn = branchNames[j];
         var bc = branchColorMap[bn] || '#58a6ff';
         var isCurrent = bn === currentBranch;
-        branchTags += '<span class="git-graph-branch" style="background:' + bc + (isCurrent ? ';font-weight:600' : '') + '">' + (isCurrent ? 'HEAD → ' : '') + bn + '</span>';
+        branchTags += '<span class="git-graph-branch" style="background:' + bc + (isCurrent ? ';font-weight:600' : '') + '">' + (isCurrent ? 'HEAD → ' : '') + this._escapeHtml(bn) + '</span>';
       }
 
       // Build row
@@ -386,7 +416,7 @@ var GitTutorial = window.GitTutorial || {};
     }
 
     var branchHtml = '<div style="font-size:11px;color:var(--text-muted);padding:4px 8px;margin-bottom:4px">☁️ origin/' +
-      this.state.currentBranch + ' · ' + this.state.remote.commits.length + ' commits</div>';
+      (this.state.currentBranch || 'HEAD') + ' · ' + this.state.remote.commits.length + ' commits</div>';
     el.innerHTML = branchHtml + html;
   };
 
@@ -469,9 +499,15 @@ var GitTutorial = window.GitTutorial || {};
       var ar = adjArrows[a];
       if (!pos[ar.from] || !pos[ar.to]) continue;
 
+      // When the layout wraps (narrow viewport), two zones that are adjacent in
+      // the flow can end up on different rows. Drawing the arrow anyway would
+      // run a line off-canvas and stack labels on one spot.
+      if (!this._sameRow(pos[ar.from], pos[ar.to])) continue;
+
       var x1 = pos[ar.from].right;
       var x2 = pos[ar.to].left;
       var y = pos[ar.from].midY;
+      if (x2 <= x1) continue;   // wrapped past the right edge
       var cls = this.visibleArrows[ar.name] ? 'arrow-group visible' : 'arrow-group';
 
       svg += '<g class="' + cls + '">';
@@ -482,24 +518,28 @@ var GitTutorial = window.GitTutorial || {};
     }
 
     // --- Cross-zone arrows (straight horizontal lines at bottom) ---
-    var zoneH = pos.working.bottom - pos.working.top;
-    var pullY = pos.working.bottom - zoneH * 0.15;
-    var cloneY = pos.working.bottom - zoneH * 0.05;
+    var zoneH = pos.working ? (pos.working.bottom - pos.working.top) : 0;
+    var pullY = pos.working ? pos.working.bottom - zoneH * 0.15 : 0;
+    var cloneY = pos.working ? pos.working.bottom - zoneH * 0.05 : 0;
     var mergeY = cloneY;
 
     var crossArrows = [
-      { name: 'restore', from: 'local', to: 'working', label: 'git restore', y: mergeY },
-      { name: 'pull', from: 'remote', to: 'working', label: 'git pull', y: pullY },
-      { name: 'clone', from: 'remote', to: 'local', label: 'git clone', y: cloneY }
+      { name: 'restore', from: 'local', to: 'working', label: 'git restore', yKey: 'mergeY' },
+      { name: 'pull', from: 'remote', to: 'working', label: 'git pull', yKey: 'pullY' },
+      { name: 'clone', from: 'remote', to: 'local', label: 'git clone', yKey: 'cloneY' }
     ];
 
     for (var c = 0; c < crossArrows.length; c++) {
       var cr = crossArrows[c];
       if (!pos[cr.from] || !pos[cr.to]) continue;
+      // These span distant zones, so only draw them when every zone shares one
+      // row; otherwise the line would cut across unrelated rows.
+      if (!this._sameRow(pos.working, pos.index) || !this._sameRow(pos.index, pos.local) ||
+          !this._sameRow(pos.local, pos.remote)) continue;
 
       var x1 = pos[cr.from].left;
       var x2 = pos[cr.to].right;
-      var y = cr.y;
+      var y = cr.yKey === 'pullY' ? pullY : (cr.yKey === 'cloneY' ? cloneY : mergeY);
       var cls = this.visibleArrows[cr.name] ? 'arrow-group visible' : 'arrow-group';
 
       svg += '<g class="' + cls + '">';
@@ -514,6 +554,13 @@ var GitTutorial = window.GitTutorial || {};
   };
 
   // === Flash Zone (temporary highlight) ===
+  // Two zones are on the same visual row when their vertical spans overlap.
+  // Used to skip arrow segments that a wrapped (multi-row) layout would break.
+  Renderer.prototype._sameRow = function(a, b) {
+    if (!a || !b) return false;
+    return a.top < b.bottom && b.top < a.bottom;
+  };
+
   Renderer.prototype.flashZone = function(name) {
     var zone = this.zoneContainers[name];
     if (!zone) return;
@@ -527,15 +574,21 @@ var GitTutorial = window.GitTutorial || {};
   Renderer.prototype.renderTerminalInput = function(input) {
     var div = document.createElement('div');
     div.className = 'terminal-line input';
-
-    if (!input.startsWith('git')) {
-      div.innerHTML = '<span class="prompt-sign">$ </span>' + this._escapeHtml(input);
+    var HELPER = ['touch', 'echo', 'cat', 'clear', 'help', 'reset-tutorial'];
+    var esc = function(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+    var parts = input.split(/\s+/);
+    var html = '<span class="prompt-sign">$ </span>';
+    if (parts[0] === 'git') {
+      html += '<span class="git-cmd">git</span>';
+      if (parts[1]) html += ' <span class="git-subcmd">' + esc(parts[1]) + '</span>';
+      if (parts.length > 2) html += ' <span class="cmd-arg">' + esc(parts.slice(2).join(' ')) + '</span>';
+    } else if (HELPER.indexOf(parts[0]) !== -1) {
+      html += '<span class="helper-cmd">' + esc(parts[0]) + '</span>';
+      if (parts.length > 1) html += ' <span class="cmd-arg">' + esc(parts.slice(1).join(' ')) + '</span>';
     } else {
-      div.innerHTML = '<span class="prompt-sign">$ </span><span class="git-cmd">' +
-        this._escapeHtml(input.split(' ').slice(0, 2).join(' ')) + '</span> ' +
-        this._escapeHtml(input.split(' ').slice(2).join(' '));
+      html += esc(input);
     }
-
+    div.innerHTML = html;
     this.terminalOutput.appendChild(div);
   };
 
@@ -569,21 +622,25 @@ var GitTutorial = window.GitTutorial || {};
     this.cardContent.innerHTML = this._renderMarkdown(card.content);
     this.cardTask.classList.remove('completed');
 
-    if (card.task) {
+    if (card.task && card.task.prompt) {
       this.taskPrompt.innerHTML = card.task.prompt;
       this.cardTask.style.display = 'flex';
     } else {
+      this.taskPrompt.innerHTML = '';
       this.cardTask.style.display = 'none';
     }
   };
 
   Renderer.prototype.renderSidebar = function(chapters, currentCardId) {
     var html = '';
+    if (!chapters) { this.sidebarChapters.innerHTML = ''; return; }
     for (var i = 0; i < chapters.length; i++) {
       var ch = chapters[i];
+      if (!ch) continue;
+      var cards = ch.cards || [];
       var isActive = false;
-      for (var j = 0; j < ch.cards.length; j++) {
-        if (ch.cards[j].id === currentCardId) {
+      for (var j = 0; j < cards.length; j++) {
+        if (cards[j].id === currentCardId) {
           isActive = true;
           break;
         }
@@ -591,16 +648,16 @@ var GitTutorial = window.GitTutorial || {};
 
       html += '<div class="chapter-group">';
       html += '<div class="chapter-title' + (isActive ? ' active expanded' : '') + '" data-chapter="' + i + '">' +
-        '<span>' + (i + 1) + '. ' + ch.title + '</span>' +
+        '<span>' + (i + 1) + '. ' + this._escapeHtml(ch.title || '') + '</span>' +
         '<span class="chevron">&#9654;</span>' +
         '</div>';
 
       html += '<div class="chapter-cards" style="' + (isActive ? '' : 'display:none') + '">';
-      for (var k = 0; k < ch.cards.length; k++) {
-        var card = ch.cards[k];
+      for (var k = 0; k < cards.length; k++) {
+        var card = cards[k];
         var cardActive = card.id === currentCardId ? ' active' : '';
-        html += '<div class="card-item' + cardActive + '" data-card-id="' + card.id + '">' +
-          card.title + '</div>';
+        html += '<div class="card-item' + cardActive + '" data-card-id="' + this._escapeHtml(card.id || '') + '">' +
+          this._escapeHtml(card.title || '') + '</div>';
       }
       html += '</div></div>';
     }
@@ -631,13 +688,22 @@ var GitTutorial = window.GitTutorial || {};
     var inCode = false;
     var codeLines = [];
 
+    var fenceLen = 0;   // length of the opening fence run (``` vs ````)
+
     for (var i = 0; i < lines.length; i++) {
       var line = lines[i];
-      if (!inCode && /^```/.test(line)) {
+      // A fence is a run of 3+ backticks optionally followed by a language tag.
+      // Trailing whitespace after the closing fence must not break it, and a
+      // longer opening fence must be closed by a run at least as long.
+      var fence = line.match(/^\s*(`{3,})\s*([^\s`]*)\s*$/);
+      if (!inCode && fence) {
         inCode = true;
+        fenceLen = fence[1].length;
         codeLines = [];
-      } else if (inCode && /^```$/.test(line)) {
+      } else if (inCode && /^\s*(`{3,})\s*$/.test(line) &&
+                 line.match(/^\s*(`{3,})/)[1].length >= fenceLen) {
         inCode = false;
+        fenceLen = 0;
         blocks.push({ type: 'code', content: codeLines.join('\n') });
       } else if (inCode) {
         codeLines.push(line);
@@ -671,19 +737,24 @@ var GitTutorial = window.GitTutorial || {};
   Renderer.prototype._renderInline = function(line) {
     if (!line) return '';
 
+    // Structural markers are detected on the raw line, but every piece of
+    // content goes through _formatInline, which escapes HTML first.
+    var m;
+
     // Headers
-    if (/^### (.+)$/.test(line)) return '<h3>' + RegExp.$1 + '</h3>';
-    if (/^## (.+)$/.test(line)) return '<h2>' + RegExp.$1 + '</h2>';
+    m = line.match(/^### (.+)$/);
+    if (m) return '<h3>' + this._formatInline(m[1]) + '</h3>';
+    m = line.match(/^## (.+)$/);
+    if (m) return '<h2>' + this._formatInline(m[1]) + '</h2>';
 
     // List items
-    if (/^- (.+)$/.test(line)) {
-      return '<li>' + this._formatInline(RegExp.$1) + '</li>';
-    }
+    m = line.match(/^- (.+)$/);
+    if (m) return '<li>' + this._formatInline(m[1]) + '</li>';
 
-    // Blockquote
-    if (/^>\s?(.+)$/.test(line)) {
-      return '<blockquote>' + this._formatInline(RegExp.$1) + '</blockquote>';
-    }
+    // Blockquote — the leading > is markdown syntax and is consumed here,
+    // so it must be matched before escaping turns it into &gt;.
+    m = line.match(/^>\s?(.+)$/);
+    if (m) return '<blockquote>' + this._formatInline(m[1]) + '</blockquote>';
 
     // Skip empty lines
     if (/^\s*$/.test(line)) return '';
@@ -693,12 +764,54 @@ var GitTutorial = window.GitTutorial || {};
   };
 
   Renderer.prototype._formatInline = function(text) {
-    return text
+    // Escape HTML FIRST. Card content is written with plain-text placeholders
+    // like `git add <file>` or `echo "x" >> log`; emitting them raw makes the
+    // browser swallow `<file>` as an unknown tag and can also eat `>>`.
+    // Escaping up front keeps every literal character visible, then the
+    // markdown replacements below build the real tags on top.
+    var s = this._escapeHtml(text);
+    var self = this;
+
+    // Code spans must be lifted out BEFORE emphasis runs. Otherwise a `*`
+    // inside backticks is treated as an emphasis marker and produces
+    // mismatched tags such as <code>a<em>b</em></code>.
+    var codeSpans = [];
+    s = s.replace(/`([^`]+)`/g, function(m, inner) {
+      codeSpans.push(inner);
+      return '\u0000CODE' + (codeSpans.length - 1) + '\u0000';
+    });
+
+    s = s
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.+?)\*/g, '<em>$1</em>')
-      .replace(/`([^`]+)`/g, '<code>$1</code>')
-      .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%">')
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" style="color:var(--accent)">$1</a>');
+      .replace(/!\[([^\]]*)\]\(((?:[^()]|\([^()]*\))*)\)/g, function(m, alt, url) {
+        return '<img src="' + self._safeUrl(url) + '" alt="' + alt + '" style="max-width:100%">';
+      })
+      .replace(/\[([^\]]+)\]\(((?:[^()]|\([^()]*\))*)\)/g, function(m, label, url) {
+        return '<a href="' + self._safeUrl(url) + '" target="_blank" style="color:var(--accent)">' + label + '</a>';
+      });
+
+    // Restore code spans; their content stays literal (already escaped).
+    s = s.replace(/\u0000CODE(\d+)\u0000/g, function(m, idx) {
+      return '<code>' + codeSpans[+idx] + '</code>';
+    });
+
+    return s;
+  };
+
+  // Sanitize a URL destined for an HTML attribute. The markdown patterns run
+  // after escaping, so a quote inside the URL would otherwise close the
+  // attribute and let the rest of the URL inject markup.
+  Renderer.prototype._safeUrl = function(url) {
+    var u = String(url).trim();
+    // Block script-bearing schemes outright.
+    if (/^\s*(javascript|data|vbscript):/i.test(u)) return '#';
+    return u
+      .replace(/"/g, '%22')
+      .replace(/'/g, '%27')
+      .replace(/</g, '%3C')
+      .replace(/>/g, '%3E')
+      .replace(/&(?!amp;|lt;|gt;|quot;|#)/g, '&amp;');
   };
 
   // === Full Render ===

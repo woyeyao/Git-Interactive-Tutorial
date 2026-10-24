@@ -28,6 +28,12 @@
   --transition: 200ms ease;
 }
 
+/* ===== Disable ligatures (fix: >> renders as » in Chrome) ===== */
+*, *::before, *::after {
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+}
+
 /* ===== Reset ===== */
 *, *::before, *::after {
   box-sizing: border-box;
@@ -589,16 +595,43 @@ body {
   user-select: none;
 }
 
+.terminal-input-wrap {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
 .terminal-input {
   flex: 1;
   background: none;
   border: none;
   outline: none;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: transparent;
+  caret-color: var(--accent);
+  z-index: 1;
+}
+.terminal-input-mirror {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+  white-space: pre;
+  overflow: hidden;
+  padding: 0;
   font-family: var(--font-mono);
   font-size: 13px;
   color: var(--text-primary);
-  caret-color: var(--accent);
+  z-index: 0;
 }
+.git-cmd { color: var(--green); font-weight: 600; }
+.git-subcmd { color: var(--accent); font-weight: 600; }
+.helper-cmd { color: var(--purple); font-weight: 600; }
+.cmd-arg { color: var(--text-secondary); }
 
 .terminal-input::placeholder {
   color: var(--text-muted);
